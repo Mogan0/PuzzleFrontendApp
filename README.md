@@ -67,6 +67,9 @@ Ora puoi avviare il servizio. Assicurati che la porta 5000.
     docker run -d -p 5000:5000 --name puzzle-backend-container puzzle-backend
 
 
+## Avviare web browser
+
+*Avviare un web browser qualsiasi e andare all'indirizzo http://localhost 
 
 
 

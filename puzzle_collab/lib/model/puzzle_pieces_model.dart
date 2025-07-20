@@ -1,10 +1,10 @@
 class PuzzlePieceModel {
-  final int id; // ID unico della tessera
-  int currentX; // Colonna attuale della tessera nella griglia
-  int currentY; // Riga attuale della tessera nella griglia
-  final int correctX; // Colonna corretta in cui la tessera dovrebbe trovarsi
-  final int correctY; // Riga corretta in cui la tessera dovrebbe trovarsi
-  bool isPlacedCorrectly; // Indica se la tessera è al suo posto
+  final int id;
+  int currentX;
+  int currentY;
+  final int correctX;
+  final int correctY;
+  bool isPlacedCorrectly;
 
   PuzzlePieceModel({
     required this.id,

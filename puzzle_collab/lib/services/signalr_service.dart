@@ -1,8 +1,16 @@
-// lib/services/signalr_service.dart
-
 import 'package:signalr_netcore/signalr_client.dart';
 import 'package:flutter/material.dart'; // Per debugPrint
-import 'package:logging/logging.dart';
+
+class User {
+  final String connectionId;
+  final String username;
+
+  User({required this.connectionId, required this.username});
+
+  factory User.fromJson(Map<String, dynamic> json) {
+    return User(connectionId: json['connectionId'], username: json['username']);
+  }
+}
 
 class SignalRService {
   final String _hubUrl;
@@ -11,6 +19,7 @@ class SignalRService {
   Function(List<Map<String, dynamic>>)? onPuzzleStateReceived;
   Function(String)? onError;
   Function(String)? onConnected;
+  Function(List<User>)? onUserListReceived;
 
   SignalRService(this._hubUrl);
 
@@ -21,30 +30,24 @@ class SignalRService {
         .build();
 
     _hubConnection?.onclose(({Exception? error}) {
-      // Corretto precedentemente
       debugPrint("Connessione SignalR chiusa: $error");
       onError?.call(
         "Connessione chiusa: ${error?.toString() ?? 'unknown error'}",
       );
     });
 
-    // --- CORREZIONE QUI: onreconnected si aspetta un parametro nominato 'connectionId' ---
     _hubConnection?.onreconnected(({String? connectionId}) {
-      // <-- NOTA le parentesi graffe qui!
       debugPrint("Connessione SignalR riconnessa: $connectionId");
       onConnected?.call("Riconnesso: $connectionId");
     });
 
-    // --- CORREZIONE QUI: onreconnecting si aspetta un parametro nominato 'error' ---
     _hubConnection?.onreconnecting(({Exception? error}) {
-      // <-- NOTA le parentesi graffe qui!
       debugPrint("Riconnessione SignalR in corso: $error");
       onError?.call(
         "Riconnessione in corso: ${error?.toString() ?? 'unknown error'}",
       );
     });
 
-    // Questo è già corretto
     _hubConnection?.on("ReceivePuzzleState", ([arguments]) {
       if (arguments != null && arguments.isNotEmpty) {
         List<Map<String, dynamic>> newState;
@@ -55,6 +58,19 @@ class SignalRService {
         }
         onPuzzleStateReceived?.call(newState);
         debugPrint("Stato puzzle ricevuto: $newState");
+      }
+    });
+
+    _hubConnection?.on("ReceiveUserList", ([arguments]) {
+      if (arguments != null && arguments.isNotEmpty) {
+        List<User> userList = (arguments[0] as List)
+            .cast<Map<String, dynamic>>()
+            .map((json) => User.fromJson(json))
+            .toList();
+        onUserListReceived?.call(userList);
+        debugPrint(
+          "Lista utenti ricevuta: ${userList.map((u) => u.username).join(', ')}",
+        );
       }
     });
 
@@ -71,6 +87,21 @@ class SignalRService {
   Future<void> disconnect() async {
     await _hubConnection?.stop();
     debugPrint("Connessione SignalR interrotta.");
+  }
+
+  Future<void> sendUsername(String username) async {
+    if (_hubConnection?.state == HubConnectionState.Connected) {
+      try {
+        await _hubConnection?.invoke("SetUsername", args: [username]);
+        debugPrint("Inviato username: $username");
+      } catch (e) {
+        debugPrint("Errore durante l'invio dell'username: $e");
+        onError?.call("Errore nell'invio dell'username: $e");
+      }
+    } else {
+      debugPrint("Non connesso al server per inviare l'username.");
+      onError?.call("Non connesso al server.");
+    }
   }
 
   Future<void> sendMovePiece(int pieceId, int targetX, int targetY) async {

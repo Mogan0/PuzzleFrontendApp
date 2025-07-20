@@ -1,16 +1,11 @@
 import 'dart:math';
 import 'dart:ui' as ui;
-
-import 'package:puzzle_collab/PuzzleGrid.dart';
-import 'package:puzzle_collab/model/puzzle_pieces_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:puzzle_collab/services/signalr_service.dart'; // <--- NUOVA IMPORTAZIONE
-
-// ... (PuzzlePieceModel, MyApp e gli altri helper rimangono invariati) ...
-// Per semplicità, ipotizzo che PuzzlePieceModel sia ancora nello stesso file,
-// altrimenti assicurati che il suo import sia corretto.
+import 'package:puzzle_collab/model/puzzle_pieces_model.dart';
+import 'package:puzzle_collab/services/signalr_service.dart';
+import 'package:puzzle_collab/PuzzleGrid.dart'; // Assicurati di usare la versione moderna del PuzzleGrid suggerita prima
 
 class PuzzleHome extends StatefulWidget {
   const PuzzleHome({super.key});
@@ -24,30 +19,22 @@ class _PuzzleHomeState extends State<PuzzleHome> {
   List<PuzzlePieceModel> _pieces = [];
   static const int _gridSize = 10;
 
-  // --- ISTANZA DEL SERVIZIO SIGNALR ---
   late SignalRService _signalRService;
-  // Variabile per mostrare lo stato della connessione nella UI
   String _connectionStatus = 'Disconnesso';
+  List<User> _onlineUsers = [];
+  final TextEditingController _usernameController = TextEditingController();
+  bool _isLoggedIn = false;
+  String? _myUsername;
 
   @override
   void initState() {
     super.initState();
-
-    // Inizializza il servizio SignalR con l'URL corretto del tuo backend.
-    // ***** RICORDA DI AGGIORNARE QUESTO URL *****
     _signalRService = SignalRService(
-      'http://localhost:5000/puzzlehub',
-    ); // <--- USA LOCALHOST QUI
-
-    // --- REGISTRAZIONE DEI LISTENER DAL SERVIZIO SIGNALR ---
-    // Questa funzione viene chiamata quando il server invia un nuovo stato del puzzle.
+      'http://localhost/puzzlehub',
+    ); // Nessuna porta qui, Nginx è sulla 80
     _signalRService.onPuzzleStateReceived = (newState) {
       setState(() {
-        // Aggiorna la lista _pieces con i dati ricevuti dal server.
-        // È fondamentale mappare i dati ricevuti (Map<String, dynamic>)
-        // ai tuoi oggetti PuzzlePieceModel esistenti o crearne di nuovi.
         _pieces = newState.map((data) {
-          // Cerca il pezzo esistente per ID, o crea una nuova istanza se non esiste (utile per robustezza)
           final piece = _pieces.firstWhere(
             (p) => p.id == data['id'],
             orElse: () => PuzzlePieceModel(
@@ -59,18 +46,13 @@ class _PuzzleHomeState extends State<PuzzleHome> {
               isPlacedCorrectly: data['isPlacedCorrectly'],
             ),
           );
-          // Aggiorna le proprietà del pezzo esistente con i nuovi valori dal server
           piece.currentX = data['currentX'];
           piece.currentY = data['currentY'];
           piece.isPlacedCorrectly = data['isPlacedCorrectly'];
           return piece;
         }).toList();
 
-        // Nascondi eventuali snackbar precedenti (es. "Puzzle Completato!")
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-        // Controlla la condizione di vittoria SOLO DOPO aver ricevuto e applicato
-        // lo stato aggiornato dal server.
         bool allCorrect = _pieces.every(
           (p) => p.currentX == p.correctX && p.currentY == p.correctY,
         );
@@ -89,38 +71,43 @@ class _PuzzleHomeState extends State<PuzzleHome> {
       });
     };
 
-    // Listener per gli errori di connessione
     _signalRService.onError = (message) {
       setState(() {
         _connectionStatus = 'Errore: $message';
+        _isLoggedIn = false;
       });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('SignalR: $message')));
+      debugPrint("SignalR Error from UI: $message");
     };
 
-    // Listener per lo stato di connessione (connesso/riconnesso)
     _signalRService.onConnected = (message) {
       setState(() {
         _connectionStatus = message;
       });
+      debugPrint("SignalR Connected Status from UI: $message");
+      if (_myUsername != null && _myUsername!.isNotEmpty) {
+        _signalRService.sendUsername(_myUsername!);
+      }
     };
 
-    // Avvia il caricamento dell'immagine e la connessione SignalR in parallelo
+    _signalRService.onUserListReceived = (userList) {
+      setState(() {
+        _onlineUsers = userList;
+      });
+    };
+
     _loadImage();
-    _signalRService.connect();
   }
 
   @override
   void dispose() {
-    _signalRService
-        .disconnect(); // Disconnetti da SignalR quando il widget viene eliminato
+    _signalRService.disconnect();
+    _usernameController.dispose();
     super.dispose();
   }
 
-  // --- Funzioni di Caricamento e Creazione Pezzi ---
-  // Queste rimangono simili, ma la mescolatura iniziale potrebbe essere sostituita
-  // dallo stato iniziale inviato dal server dopo la connessione.
   Future<void> _loadImage() async {
     final ByteData data = await rootBundle.load(
       'assets/Ginger_european_cat.jpg',
@@ -133,10 +120,9 @@ class _PuzzleHomeState extends State<PuzzleHome> {
 
     setState(() {
       _originalImage = frameInfo.image;
-      // In un contesto multiplayer, potresti voler attendere lo stato iniziale dal server
-      // prima di inizializzare i pezzi, o usare questo come fallback.
-      // Per ora, lo manteniamo per avere un puzzle giocabile anche senza connessione immediata.
-      _createAndShufflePuzzlePieces();
+      if (_pieces.isEmpty) {
+        _createAndShufflePuzzlePieces();
+      }
     });
   }
 
@@ -175,99 +161,262 @@ class _PuzzleHomeState extends State<PuzzleHome> {
     });
   }
 
-  // --- Funzioni per i Pulsanti: Ora Invocano il Servizio SignalR ---
-  void _rearrangePieces() {
-    _signalRService.sendShuffleRequest();
-    // Non aggiornare _pieces qui! L'aggiornamento avverrà tramite la callback
-    // onPuzzleStateReceived quando il server invierà il nuovo stato.
-  }
+  void _rearrangePieces() => _signalRService.sendShuffleRequest();
+  void _resetPieces() => _signalRService.sendResetRequest();
 
-  void _resetPieces() {
-    _signalRService.sendResetRequest();
-    // Anche qui, non aggiornare _pieces direttamente.
+  void _connectWithUsername() {
+    final username = _usernameController.text.trim();
+    if (username.isNotEmpty) {
+      _myUsername = username;
+      _signalRService.connect();
+      setState(() => _isLoggedIn = true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Per favore, inserisci un username.')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Mostra un indicatore di caricamento e lo stato della connessione se l'immagine non è pronta
-    if (_originalImage == null || _pieces.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(
-              _connectionStatus,
-            ), // Mostra lo stato attuale della connessione
-          ],
+    if (!_isLoggedIn) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("Entra nel Puzzle")),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'Scegli il tuo Username',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Username',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _connectWithUsername(),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: _connectWithUsername,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 15,
+                    ),
+                  ),
+                  child: const Text('Gioca', style: TextStyle(fontSize: 18)),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  _connectionStatus,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
 
-    return Builder(
-      builder: (context) {
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text("Puzzle Multiplayer DEMO"),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Center(
-                  child: Text(
-                    _connectionStatus,
-                    style: TextStyle(fontSize: 14, color: Colors.white70),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          body: PuzzleGrid(
-            originalImage: _originalImage!,
-            pieces: _pieces,
-            gridCount: _gridSize,
-            // --- PASSA LA CALLBACK AL PUZZLEGRID ---
-            // Quando un pezzo viene trascinato e rilasciato, PuzzleGrid chiamerà questa funzione.
-            // Questa funzione a sua volta invierà la richiesta al server SignalR.
-            onPieceMoveRequested: (pieceId, targetX, targetY) {
-              _signalRService.sendMovePiece(pieceId, targetX, targetY);
-              // NON chiamare setState qui. L'UI si aggiornerà solo quando
-              // il server invierà il nuovo stato tramite 'ReceivePuzzleState'.
+    if (_originalImage == null || _pieces.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.people),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                builder: (context) {
+                  return Container(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Utenti Online:',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        if (_onlineUsers.isEmpty)
+                          const Text('Nessun utente online.'),
+                        ..._onlineUsers
+                            .map(
+                              (user) => Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4.0,
+                                ),
+                                child: Text(
+                                  user.username,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ],
+                    ),
+                  );
+                },
+              );
             },
           ),
-          floatingActionButton: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FloatingActionButton.extended(
-                heroTag: 'rearrangeButton',
-                onPressed: _rearrangePieces,
-                label: const Text('Mescola'),
-                icon: const Icon(Icons.shuffle),
-                backgroundColor: Colors.blueAccent,
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Center(
+              child: Text(
+                _connectionStatus,
+                style: const TextStyle(fontSize: 14, color: Colors.white70),
               ),
-              const SizedBox(height: 10),
-              FloatingActionButton.extended(
-                heroTag: 'resetButton',
-                onPressed: _resetPieces,
-                label: const Text('Reset'),
-                icon: const Icon(Icons.refresh),
-                backgroundColor: Colors.redAccent,
-              ),
-              FloatingActionButton.extended(
-                onPressed: () async {
-                  debugPrint("Tentativo manuale di connessione...");
-                  await _signalRService.connect();
-                  debugPrint("Richiesta di connessione completata.");
-                },
-                label: const Text('Connetti Man.'),
-                icon: const Icon(Icons.link),
-              ),
+            ),
+          ),
+        ],
+      ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.blueGrey.shade50,
+              Colors.blue.shade100.withOpacity(0.22),
+              Colors.white,
             ],
           ),
-          floatingActionButtonLocation:
-              FloatingActionButtonLocation.centerFloat,
-        );
-      },
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_myUsername != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0, top: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: Colors.blueAccent.shade100,
+                        child: Text(
+                          _myUsername!.substring(0, 1).toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _myUsername!,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blueGrey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final double size = min(
+                    min(constraints.maxWidth, constraints.maxHeight),
+                    420,
+                  );
+                  return Material(
+                    elevation: 14,
+                    borderRadius: BorderRadius.circular(32),
+                    child: Container(
+                      width: size,
+                      height: size,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(32),
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withOpacity(0.8),
+                            Colors.blueGrey.withOpacity(0.13),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blueGrey.withOpacity(0.11),
+                            blurRadius: 28,
+                            spreadRadius: 4,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                        border: Border.all(
+                          color: Colors.blueGrey.withOpacity(0.18),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: PuzzleGrid(
+                        originalImage: _originalImage!,
+                        pieces: _pieces,
+                        gridCount: _gridSize,
+                        onPieceMoveRequested: (pieceId, targetX, targetY) {
+                          _signalRService.sendMovePiece(
+                            pieceId,
+                            targetX,
+                            targetY,
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 36),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 12.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            FloatingActionButton.extended(
+              heroTag: 'rearrangeButton',
+              onPressed: _rearrangePieces,
+              label: const Text('Mescola'),
+              icon: const Icon(Icons.shuffle),
+              backgroundColor: Colors.blueAccent.shade400,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              elevation: 7,
+            ),
+            const SizedBox(width: 16),
+            FloatingActionButton.extended(
+              heroTag: 'resetButton',
+              onPressed: _resetPieces,
+              label: const Text('Reset'),
+              icon: const Icon(Icons.refresh),
+              backgroundColor: Colors.redAccent.shade200,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              elevation: 7,
+            ),
+          ],
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }

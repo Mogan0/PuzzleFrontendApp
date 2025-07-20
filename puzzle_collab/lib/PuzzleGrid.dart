@@ -1,8 +1,8 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 
-import 'package:puzzle_collab/model/puzzle_pieces_model.dart';
 import 'package:flutter/material.dart';
+import 'package:puzzle_collab/model/puzzle_pieces_model.dart';
 
 class PuzzleGrid extends StatefulWidget {
   final ui.Image originalImage;
@@ -26,6 +26,7 @@ class _PuzzleGridState extends State<PuzzleGrid> {
   late List<PuzzlePieceModel> _currentPieces;
   double _gridSize = 0;
   double _pieceSize = 0;
+  int? _draggingId;
 
   @override
   void initState() {
@@ -53,70 +54,111 @@ class _PuzzleGridState extends State<PuzzleGrid> {
             width: _gridSize,
             height: _gridSize,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey, width: 1.0),
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 32,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              border: Border.all(
+                color: Colors.blueGrey.withOpacity(0.3),
+                width: 1.5,
+              ),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withOpacity(0.40),
+                  Colors.white.withOpacity(0.10),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
             child: Stack(
               children: [
+                // Sfondo glassmorphism
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(32),
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+                ),
                 ..._currentPieces.map((piece) {
                   final Offset pieceScreenPosition = Offset(
                     piece.currentX * _pieceSize,
                     piece.currentY * _pieceSize,
                   );
 
-                  return Positioned(
+                  return AnimatedPositioned(
                     key: ValueKey(piece.id),
                     left: pieceScreenPosition.dx,
                     top: pieceScreenPosition.dy,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
                     child: DragTarget<PuzzlePieceModel>(
-                      onWillAcceptWithDetails: (details) {
-                        return details.data.id != piece.id;
-                      },
+                      onWillAcceptWithDetails: (details) =>
+                          details.data.id != piece.id,
                       onAcceptWithDetails: (details) {
-                        final PuzzlePieceModel draggedPiece = details.data;
-                        final PuzzlePieceModel targetPiece = piece;
-
+                        final draggedPiece = details.data;
                         widget.onPieceMoveRequested(
                           draggedPiece.id,
-                          targetPiece.currentX,
-                          targetPiece.currentY,
+                          piece.currentX,
+                          piece.currentY,
                         );
                       },
                       builder: (context, candidateData, rejectedData) {
-                        return Draggable<PuzzlePieceModel>(
-                          data: piece,
-                          feedback: SizedBox(
-                            width: _pieceSize,
-                            height: _pieceSize,
-                            child: Opacity(
-                              opacity: 0.7,
+                        final bool isDragging = _draggingId == piece.id;
+                        return MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: Draggable<PuzzlePieceModel>(
+                            data: piece,
+                            onDragStarted: () {
+                              setState(() {
+                                _draggingId = piece.id;
+                              });
+                            },
+                            onDraggableCanceled: (_, __) {
+                              setState(() {
+                                _draggingId = null;
+                              });
+                            },
+                            onDragEnd: (_) {
+                              setState(() {
+                                _draggingId = null;
+                              });
+                            },
+                            feedback: SizedBox(
+                              width: _pieceSize,
+                              height: _pieceSize,
+                              child: Opacity(
+                                opacity: 0.8,
+                                child: _buildPuzzlePieceWidget(
+                                  piece,
+                                  widget.originalImage,
+                                  _pieceSize,
+                                  widget.gridCount,
+                                  isDragging: true,
+                                ),
+                              ),
+                            ),
+                            childWhenDragging: _buildEmptySlot(),
+                            child: AnimatedScale(
+                              scale: isDragging ? 1.10 : 1.0,
+                              duration: const Duration(milliseconds: 160),
+                              curve: Curves.easeOutBack,
                               child: _buildPuzzlePieceWidget(
-                                // Chiamata al metodo interno
                                 piece,
                                 widget.originalImage,
                                 _pieceSize,
                                 widget.gridCount,
+                                isDragging: false,
                               ),
                             ),
-                          ),
-                          childWhenDragging: SizedBox(
-                            width: _pieceSize,
-                            height: _pieceSize,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: Colors.grey,
-                                  width: 0.5,
-                                ),
-                                color: Colors.transparent,
-                              ),
-                            ),
-                          ),
-                          child: _buildPuzzlePieceWidget(
-                            // Chiamata al metodo interno
-                            piece,
-                            widget.originalImage,
-                            _pieceSize,
-                            widget.gridCount,
                           ),
                         );
                       },
@@ -131,13 +173,13 @@ class _PuzzleGridState extends State<PuzzleGrid> {
     );
   }
 
-  // --- FUNZIONE _buildPuzzlePieceWidget SPOSTATA QUI DENTRO ---
   Widget _buildPuzzlePieceWidget(
     PuzzlePieceModel piece,
     ui.Image image,
     double pieceDisplaySize,
-    int gridCount,
-  ) {
+    int gridCount, {
+    required bool isDragging,
+  }) {
     final double imageSliceWidth = image.width / gridCount;
     final double imageSliceHeight = image.height / gridCount;
 
@@ -148,32 +190,54 @@ class _PuzzleGridState extends State<PuzzleGrid> {
       imageSliceHeight,
     );
 
-    return Container(
+    final borderColor = piece.isPlacedCorrectly
+        ? Colors.greenAccent.shade400
+        : Colors.black.withOpacity(0.15);
+
+    final borderWidth = piece.isPlacedCorrectly ? 0.0 : 1.2;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
       decoration: BoxDecoration(
-        border: Border.all(
-          color: piece.isPlacedCorrectly
-              ? Colors.green
-              : Colors.black26, // Bordo verde se al posto
-          width: piece.isPlacedCorrectly ? 2.0 : 0.5,
-        ),
+        borderRadius: BorderRadius.circular(1),
+        border: Border.all(color: borderColor, width: borderWidth),
+        boxShadow: [
+          if (piece.isPlacedCorrectly)
+            BoxShadow(
+              color: Colors.greenAccent.withOpacity(0.24),
+              blurRadius: 2,
+              spreadRadius: 1,
+            ),
+          if (!piece.isPlacedCorrectly)
+            BoxShadow(
+              color: Colors.red,
+              blurRadius: 12,
+              spreadRadius: 2,
+              offset: const Offset(2, 4),
+            ),
+        ],
+        color: isDragging
+            ? Colors.blue.withOpacity(0.12)
+            : Colors.white.withOpacity(0.05),
       ),
-      child: CustomPaint(
-        painter: _ImageSlicePainter(image, imageRect),
-        size: Size(pieceDisplaySize, pieceDisplaySize),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(2),
+        child: CustomPaint(
+          painter: _ImageSlicePainter(image, imageRect),
+          size: Size(pieceDisplaySize, pieceDisplaySize),
+        ),
       ),
     );
   }
-}
 
-// L'estensione e il CustomPainter rimangono fuori, poiché non dipendono dallo stato del widget
-extension IterableExtension<T> on Iterable<T> {
-  T? firstWhereOrNull(bool Function(T) test) {
-    for (var element in this) {
-      if (test(element)) {
-        return element;
-      }
-    }
-    return null;
+  Widget _buildEmptySlot() {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.withOpacity(0.5), width: 0.9),
+        borderRadius: BorderRadius.circular(2),
+        color: Colors.grey.withOpacity(0.09),
+      ),
+    );
   }
 }
 

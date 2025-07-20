@@ -13,8 +13,6 @@ build/
 android/app/src/main/kotlin/com/example/puzzle_collab/MainActivity.kt # Se non vuoi tracciare file specifici come questo, altrimenti rimuovi
 ios/.symlinks/
 ios/.generated/
-web/
-lib/
 pubspec.lock # Potresti volerlo includere per coerenza di dipendenze, o ignorarlo
 # Specific to Android (if building Android)
 android/local.properties

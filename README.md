@@ -23,19 +23,35 @@ Ho scelto di containerizzare entrambi i servizi con Docker.
 
 **Server Web Proxy**: Nginx (dentro il container Flutter) - per servire il frontend e inoltrare le richieste SignalR.
 
-## Per avviare il progetto
 
-Per avviare l'applicazione, ti servirà [Docker Desktop](https://www.docker.com/) sul computer. 
 
-## 1. Clona i Repository
+# Per avviare il progetto PuzzleFrontendApp [Link qui](https://github.com/Mogan0/PuzzleFrontendApp/)
 
-### Clona il repository del backend
-    git clone https://github.com/Mogan0/PuzzleBackendApp
-    cd PuzzleBackendApp
-
-### Clona il repository del frontend
+## 1. Clona il repository del frontend
     git clone https://github.com/Mogan0/PuzzleFrontendApp
     cd PuzzleFrontendApp
+
+## 3. Costruisci l'Immagine Docker del Frontend
+
+    cd ../PuzzleFrontendApp # Se sei ancora nella cartella del backend
+    docker build --no-cache -t puzzle-frontend .
+
+### Avvia il container del frontend
+    docker run -d -p 80:80 --name puzzle-frontend-container puzzle-frontend
+
+
+
+
+    
+
+# Per avviare il progetto PuzzleBackendApp
+
+Per avviare l'applicazione, ti servirà Docker Desktop (o un setup Docker equivalente) sul computer.
+
+## 1. Clona i Repository del backend
+
+    git clone https://github.com/Mogan0/PuzzleBackendApp
+    cd PuzzleBackendApp
 
 ## 2. Costruisci l'Immagine Docker del Backend
 
@@ -44,28 +60,15 @@ Bash
 
     docker build -t puzzle-backend .
 
-## 3. Costruisci l'Immagine Docker del Frontend
+## 3. Avvia il Container
 
-Ora spostati nella directory PuzzleFrontendApp.
-Bash
+Ora puoi avviare il servizio. Assicurati che la porta 5000.
 
-    cd ../PuzzleFrontendApp # Se sei ancora nella cartella del backend
-    docker build --no-cache -t puzzle-frontend .
-
-## 4. Avvia i Container
-
-Ora puoi avviare entrambi i servizi. Assicurati che le porte 80 e 5000 non siano già occupate.
-Bash
-
-### Avvia il container del backend
     docker run -d -p 5000:5000 --name puzzle-backend-container puzzle-backend
 
-### Avvia il container del frontend
-    docker run -d -p 80:80 --name puzzle-frontend-container puzzle-frontend
 
-## 5. Avviare Web Browser
 
-Apri un qualsiasi browser all'indirizzo http://localhost/
+
 
 ## BONUS: Accedere da Altri Dispositivi (Rete Locale)
 

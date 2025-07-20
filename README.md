@@ -5,23 +5,23 @@ L'idea è che chiunque si connetta possa collaborare per risolvere il puzzle, e 
 
 ## Ho diviso il progetto in due repository principali:
 
-PuzzleBackendApp: Il backend dell'app, gestisce lo stato del puzzle e la comunicazione in tempo reale.
+**PuzzleBackendApp**: Il backend dell'app, gestisce lo stato del puzzle e la comunicazione in tempo reale.
 
-PuzzleFrontendApp: L'interfaccia utente web, quella con cui interagisci per giocare.
+**PuzzleFrontendApp**: L'interfaccia utente web, quella con cui interagisci per giocare.
 
 Ho scelto di containerizzare entrambi i servizi con Docker.
 
 ### Tecnologie Utilizzate
 
-Frontend: Flutter (Dart) - per un'interfaccia web reattiva.
+**Frontend**: Flutter (Dart) - per un'interfaccia web reattiva.
 
-Backend: ASP.NET Core (C#) - per l'API e la gestione della logica.
+**Backend**: ASP.NET Core (C#) - per l'API e la gestione della logica.
 
-Comunicazione Real-Time: ASP.NET Core SignalR - Permette la sincronizzazione istantanea con WebSocket/Long Polling.
+**Comunicazione Real-Time**: ASP.NET Core SignalR - Permette la sincronizzazione istantanea con WebSocket/Long Polling.
 
-Container: Docker - per isolare e far girare tutto.
+**Container**: Docker - per isolare e far girare tutto.
 
-Server Web Proxy: Nginx (dentro il container Flutter) - per servire il frontend e inoltrare le richieste SignalR.
+**Server Web Proxy**: Nginx (dentro il container Flutter) - per servire il frontend e inoltrare le richieste SignalR.
 
 ## Per avviare il progetto
 

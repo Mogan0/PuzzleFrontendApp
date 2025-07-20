@@ -25,7 +25,7 @@ Ho scelto di containerizzare entrambi i servizi con Docker.
 
 ## Per avviare il progetto
 
-Per avviare l'applicazione, ti servirà Docker Desktop (o un setup Docker equivalente) sul computer.
+Per avviare l'applicazione, ti servirà [Docker Desktop](https://www.docker.com/) sul computer. 
 
 ## 1. Clona i Repository
 

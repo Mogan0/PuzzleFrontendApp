@@ -5,7 +5,7 @@ L'idea è che chiunque si connetta possa collaborare per risolvere il puzzle, e 
 
 ## Ho diviso il progetto in due repository principali:
 
-**PuzzleBackendApp**: Il backend dell'app, gestisce lo stato del puzzle e la comunicazione in tempo reale. **https://github.com/Mogan0/PuzzleBackendApp)**
+**PuzzleBackendApp**: Il backend dell'app, gestisce lo stato del puzzle e la comunicazione in tempo reale. **https://github.com/Mogan0/PuzzleBackendApp**
 
 **PuzzleFrontendApp**: L'interfaccia utente web, quella con cui interagisci per giocare. **https://github.com/Mogan0/PuzzleFrontendApp/**
 
